@@ -1,0 +1,8 @@
+name, memory.total [MiB]
+NVIDIA H100 80GB HBM3, 81559 MiB
+Staging data to /localscratch/natgill.25426746.0/data ...
+13G	/localscratch/natgill.25426746.0/data/bach
+4.0G	/localscratch/natgill.25426746.0/data/breakhis
+988M	/localscratch/natgill.25426746.0/data/crc7k
+1.6M	/localscratch/natgill.25426746.0/data/mhist
+python: can't open file '/lustre09/project/6090488/natgill/ShareLock_hist/feat_precompute/extract_uni2h_features.py': [Errno 2] No such file or directory

@@ -1,0 +1,17 @@
+category,anchor,same_meaning,opposite_meaning,sim_same,sim_opposite,correct
+explicit no,Tumor cells are present.,Malignant cells are identified.,No tumor cells are present.,0.8951,0.8585,True
+not identified,Lymphovascular invasion is identified.,Tumor emboli are seen in vessels.,Lymphovascular invasion is not identified.,0.8651,0.9092,False
+not present,Perineural invasion is present.,Tumor surrounds nerve fibers.,Perineural invasion is not present.,0.7221,0.911,False
+free of,Margins are involved by carcinoma.,Carcinoma extends to the resection margin.,Margins are free of carcinoma.,0.8812,0.8909,False
+negative for,Metastatic carcinoma in the lymph node.,The lymph node contains tumor deposits.,Lymph node negative for metastatic carcinoma.,0.8819,0.7818,True
+prefix non-,The lesion is malignant.,The lesion is cancerous.,The lesion is non-malignant.,0.9311,0.9599,False
+benign = non-malignant,The lesion is benign.,The lesion is non-malignant.,The lesion is malignant.,0.9736,0.9515,True
+absence as anchor,No evidence of malignancy.,Benign tissue.,Evidence of malignancy.,0.7354,0.8198,False
+absent,Dysplasia is present.,Dysplastic epithelium is seen.,Dysplasia is absent.,0.9202,0.9308,False
+not seen,Necrosis is seen.,There are areas of necrotic tissue.,Necrosis is not seen.,0.9402,0.9095,True
+absent,Mitotic figures are frequent.,Mitoses are numerous.,Mitotic figures are absent.,0.9149,0.9137,True
+without,Invasive carcinoma is present.,Tumor infiltrates the stroma.,Carcinoma in situ without invasion.,0.8467,0.8924,False
+explicit no,Atypical cells are seen.,Cytological atypia is present.,No atypical cells are seen.,0.9087,0.9261,False
+positive/negative,Positive for malignancy.,Malignant.,Negative for malignancy.,0.869,0.9376,False
+not present,Granulomas are present.,Granulomatous inflammation is seen.,Granulomas are not present.,0.9379,0.9606,False
+antonym (control),The tumor is high grade.,Poorly differentiated tumor.,The tumor is low grade.,0.8202,0.978,False

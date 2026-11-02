@@ -1,0 +1,90 @@
+name, memory.total [MiB]
+NVIDIA H100 80GB HBM3, 81559 MiB
+Staging data to /localscratch/natgill.25427286.0/data ...
+13G	/localscratch/natgill.25427286.0/data/bach
+4.1G	/localscratch/natgill.25427286.0/data/breakhis
+988M	/localscratch/natgill.25427286.0/data/crc7k
+317M	/localscratch/natgill.25427286.0/data/mhist
+device=cuda  amp=torch.bfloat16  workers=8
+
+=== bach  (/localscratch/natgill.25427286.0/data/bach)
+    400 images, labels: {'Benign': 100, 'InSitu': 100, 'Invasive': 100, 'Normal': 100}
+    uni2h_resize.pt exists, skipping (use --overwrite)
+    uni2h_tile.pt exists, skipping (use --overwrite)
+
+=== crc  (/localscratch/natgill.25427286.0/data/crc7k)
+    7180 images, labels: {'ADI': 1338, 'TUM': 1233, 'MUC': 1035, 'BACK': 847, 'NORM': 741, 'LYM': 634, 'MUS': 592, 'STR': 421, 'DEB': 339}
+  mode=native
+    128/7180 images  (2s)
+    2688/7180 images  (5s)
+    5248/7180 images  (7s)
+    saved /project/rrg-josedolz/natgill/data/patch_datasets/uni_2h_feat/crc/uni2h_native.pt  features (7180, 1536)
+
+=== mhist  (/localscratch/natgill.25427286.0/data/mhist)
+    3152 images, labels: {'HP': 2162, 'SSA': 990}
+  mode=native
+    128/3152 images  (1s)
+    2688/3152 images  (3s)
+    saved /project/rrg-josedolz/natgill/data/patch_datasets/uni_2h_feat/mhist/uni2h_native.pt  features (3152, 1536)
+
+=== breakhis  (/localscratch/natgill.25427286.0/data/breakhis)
+    7909 images, labels: {'malignant': 5429, 'benign': 2480}
+  mode=resize
+    128/7909 images  (2s)
+    2688/7909 images  (7s)
+    5248/7909 images  (11s)
+    7808/7909 images  (16s)
+    saved /project/rrg-josedolz/natgill/data/patch_datasets/uni_2h_feat/breakhis/uni2h_resize.pt  features (7909, 1536)
+  mode=tile
+    8/7909 images  (0s)
+    168/7909 images  (2s)
+    328/7909 images  (3s)
+    488/7909 images  (4s)
+    648/7909 images  (5s)
+    808/7909 images  (6s)
+    968/7909 images  (8s)
+    1128/7909 images  (9s)
+    1288/7909 images  (10s)
+    1448/7909 images  (11s)
+    1608/7909 images  (12s)
+    1768/7909 images  (13s)
+    1928/7909 images  (15s)
+    2088/7909 images  (16s)
+    2248/7909 images  (17s)
+    2408/7909 images  (18s)
+    2568/7909 images  (19s)
+    2728/7909 images  (20s)
+    2888/7909 images  (22s)
+    3048/7909 images  (23s)
+    3208/7909 images  (24s)
+    3368/7909 images  (25s)
+    3528/7909 images  (26s)
+    3688/7909 images  (27s)
+    3848/7909 images  (28s)
+    4008/7909 images  (30s)
+    4168/7909 images  (31s)
+    4328/7909 images  (32s)
+    4488/7909 images  (33s)
+    4648/7909 images  (34s)
+    4808/7909 images  (35s)
+    4968/7909 images  (37s)
+    5128/7909 images  (38s)
+    5288/7909 images  (39s)
+    5448/7909 images  (40s)
+    5608/7909 images  (41s)
+    5768/7909 images  (42s)
+    5928/7909 images  (44s)
+    6088/7909 images  (45s)
+    6248/7909 images  (46s)
+    6408/7909 images  (47s)
+    6568/7909 images  (48s)
+    6728/7909 images  (50s)
+    6888/7909 images  (51s)
+    7048/7909 images  (52s)
+    7208/7909 images  (53s)
+    7368/7909 images  (54s)
+    7528/7909 images  (55s)
+    7688/7909 images  (57s)
+    7848/7909 images  (58s)
+    saved /project/rrg-josedolz/natgill/data/patch_datasets/uni_2h_feat/breakhis/uni2h_tile.pt  features (7909, 1536)
+Done. Features in /project/rrg-josedolz/natgill/data/patch_datasets/uni_2h_feat
