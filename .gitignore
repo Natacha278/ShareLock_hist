@@ -1,2 +1,4 @@
-runs
-feat_precompute/QuiltCleaner
+runs/
+feat_precompute/QuiltCleaner/
+commands.md
+sb_*

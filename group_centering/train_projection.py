@@ -151,8 +151,44 @@ def balanced_acc(y, pred):
     return float(balanced_accuracy_score(y, pred))
 
 
+# ----------------------------------------------------------------------------- hubness correction
+HUB_METHODS = ("none", "csls", "mean")
+
+
 @torch.no_grad()
-def zero_shot(model, encoder, test_dir, modes, device, run_dir, prompt_cache):
+def hub_penalty(ref, cls, method, k=100):
+    """Per-class penalty r(c), subtracted from the image-class scores before the argmax.
+
+    ref [R, D]: encoded reference images, cls [C, D]: class embeddings (both L2-normalised).
+      csls: r(c) = mean cosine of class c to its k nearest reference images (Conneau et al. 2018).
+            The image-side CSLS term is the same for every class of one image, so it cannot change
+            the argmax and is left out.
+      mean: r(c) = mean cosine of class c to all reference images (k = R).
+    A class that is close to many images (a hub) is penalised, which counters the collapse of
+    predictions onto one class (Radovanovic et al. 2010; Dinu et al. 2015).
+    """
+    s = ref @ cls.t()                                                       # [R, C]
+    if method == "csls":
+        return s.topk(min(k, len(ref)), dim=0).values.mean(0)
+    if method == "mean":
+        return s.mean(0)
+    raise ValueError(method)
+
+
+@torch.no_grad()
+def quilt_reference(model, data, n=50_000, seed=0, batch=16384):
+    """Encoded Quilt TRAIN images, used as the reference set of hub_penalty (--hub-ref quilt)."""
+    imgs = data.images["train"]
+    g = torch.Generator(device="cpu").manual_seed(seed)
+    imgs = imgs[torch.randperm(len(imgs), generator=g)[:n].to(imgs.device)]
+    model.eval()
+    return torch.cat([model.encode_image(data.img[imgs[s:s + batch]]) for s in range(0, len(imgs), batch)])
+
+
+@torch.no_grad()
+def zero_shot(model, encoder, test_dir, modes, device, run_dir, prompt_cache, hub=None):
+    """hub: None, or {"method": "csls"|"mean", "k": int, "ref": encoded reference images or None}.
+    ref None uses the evaluated test images themselves (transductive, no labels)."""
     import pandas as pd
     from sklearn.metrics import confusion_matrix, f1_score
     model.eval()
@@ -192,7 +228,12 @@ def zero_shot(model, encoder, test_dir, modes, device, run_dir, prompt_cache):
             if unknown:
                 raise SystemExit(f"[{ds}] labels {unknown} have no prompts in zeroshot_prompts.py")
             y = np.array([labels.index(l) for l in y_str])
-            pred = (model.encode_image(feats.to(device)) @ cls.t()).argmax(1).cpu().numpy()
+            z = model.encode_image(feats.to(device))
+            scores = z @ cls.t()
+            if hub and hub.get("method", "none") != "none":
+                ref = z if hub.get("ref") is None else hub["ref"]
+                scores = scores - hub_penalty(ref, cls, hub["method"], hub.get("k", 100))[None]
+            pred = scores.argmax(1).cpu().numpy()
 
             r = {
                 "n": int(len(y)),
@@ -247,6 +288,12 @@ def main():
     p.add_argument("--warmup-epochs", type=float, default=1.0)
     p.add_argument("--sample-by", choices=["image", "pair"], default="image")
     p.add_argument("--seed", type=int, default=0)
+    # zero-shot hubness correction (see hub_penalty)
+    p.add_argument("--hub-correction", choices=HUB_METHODS, default="none")
+    p.add_argument("--hub-k", type=int, default=100,
+                   help="neighbours for --hub-correction csls (large k: few classes, many images)")
+    p.add_argument("--hub-ref", choices=["quilt", "test"], default="quilt",
+                   help="reference images: Quilt train images, or each test set itself (transductive)")
     # output
     p.add_argument("--runs-dir", default="runs")
     p.add_argument("--run-name", default=None)
@@ -337,13 +384,17 @@ def main():
 
     # ------------------------------------------------------------ zero-shot on best checkpoint
     model.load_state_dict(torch.load(run_dir / "model_best.pt", map_location=device)["state_dict"])
+    hub = None
+    if args.hub_correction != "none":
+        ref = quilt_reference(model, data, seed=args.seed) if args.hub_ref == "quilt" else None
+        hub = {"method": args.hub_correction, "k": args.hub_k, "ref": ref}
     del data
     torch.cuda.empty_cache()
     print("\nzero-shot evaluation (best checkpoint):")
     encoder = load_text_encoder(args.txt_model, device)
     prompt_cache = {}
     modes = [m.strip() for m in args.test_modes.split(",") if m.strip()]
-    zs = zero_shot(model, encoder, args.test_feats, modes, device, run_dir, prompt_cache)
+    zs = zero_shot(model, encoder, args.test_feats, modes, device, run_dir, prompt_cache, hub=hub)
     (run_dir / "prompts.json").write_text(json.dumps(prompt_cache, indent=1))
 
     retr = {}
@@ -352,7 +403,8 @@ def main():
         retr = arch_retrieval(model, args.arch_feats, txt_model_name, device)
 
     results = {"best_epoch": best_epoch, "val_retrieval": torch.load(run_dir / "model_best.pt")["val"],
-               "zero_shot": zs, "retrieval": retr}
+               "zero_shot": zs, "retrieval": retr,
+               "hub_correction": {"method": args.hub_correction, "k": args.hub_k, "ref": args.hub_ref}}
     (run_dir / "results.json").write_text(json.dumps(results, indent=2))
 
     # ------------------------------------------------------------ one-line summary across runs
