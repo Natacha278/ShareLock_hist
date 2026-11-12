@@ -3,3 +3,5 @@ runs_slide_data/
 feat_precompute/QuiltCleaner/
 commands.md
 sb_*
+__pycache__/
+*.pyc

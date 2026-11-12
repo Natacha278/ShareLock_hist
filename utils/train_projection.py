@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 """
 Train a projection (ShareLock-style) on precomputed Quilt-1M features, then evaluate zero-shot
-classification on BACH, CRC-VAL-HE-7K, MHIST and BreakHis (benign/malignant and 8 subtypes).
+classification on BACH, CRC-VAL-HE-7K, MHIST, BreakHis (benign/malignant and 8 subtypes) and
+BRACS (7 subtypes and 3 groups, official test split).
+
+Image modes (--test-modes) for the large-image datasets: resizecrop is the standard benchmark
+preprocessing (eva / THUNDER); resize and tile are kept for comparison.
 
 Everything for one run goes to <runs-dir>/<run-name>/:
   config.json          all arguments + data / environment info
@@ -16,7 +20,7 @@ and a one-line summary is appended to <runs-dir>/summary.csv, to compare runs.
 Model selection uses ONLY the Quilt validation split; the benchmarks are evaluated once at the end.
 
 Example:
-  python train_projection.py \
+  python utils/train_projection.py \
     --pairs /project/.../quilt_pairs_t05_biolord.pt \
     --test-feats /project/.../features/uni2h \
     --txt-model /project/rrg-josedolz/natgill/weights/BioLORD-2023 \
@@ -48,10 +52,16 @@ TASKS = {
     "mhist": ("mhist", None),
     "breakhis": ("breakhis", None),                     # benign vs malignant
     "breakhis_subtype": ("breakhis", "subtype"),        # 8 tumour subtypes
+    "bracs": ("bracs", None),                           # 7 subtypes: N PB UDH FEA ADH DCIS IC
+    "bracs_3class": ("bracs", "group"),                 # benign / atypical / malignant
 }
+LARGE_MODES = ["resizecrop", "resize", "tile"]          # modes of the non-224 datasets
 SUMMARY_COLS = [f"{t}/{m}_bal_acc" for t, ms in
-                [("bach", ["resize", "tile"]), ("crc", ["native"]), ("mhist", ["native"]),
-                 ("breakhis", ["resize", "tile"]), ("breakhis_subtype", ["resize", "tile"])] for m in ms]
+                [("bach", LARGE_MODES), ("crc", ["native"]), ("mhist", ["native"]),
+                 ("breakhis", LARGE_MODES), ("breakhis_subtype", LARGE_MODES),
+                 ("bracs", LARGE_MODES), ("bracs_3class", LARGE_MODES)] for m in ms]
+# BreakHis restricted to 40X images, the setting of eva / THUNDER
+SUMMARY_COLS += [f"{t}/{m}_bal_acc_40X" for t in ("breakhis", "breakhis_subtype") for m in LARGE_MODES]
 SUMMARY_COLS += [f"arch_{s}_{k}" for s in ("pubmed", "books")
                  for k in ("i2t_R@1", "i2t_R@5", "i2t_R@10", "t2i_R@1", "t2i_R@5", "t2i_R@10")]
 
@@ -140,10 +150,82 @@ def test_files(test_dir, dataset, modes):
 
 
 def eval_split(dataset, meta):
-    """Which images to evaluate: MHIST uses its official test partition, others all images."""
-    if dataset == "mhist" and meta is not None and "split" in meta.columns:
+    """Which images to evaluate: MHIST and BRACS use their official test partitions (977 and 570
+    images, as in THUNDER), the others all images."""
+    if (dataset == "mhist" or dataset.startswith("bracs")) and meta is not None and "split" in meta.columns:
         return torch.tensor((meta["split"].astype(str).str.lower() == "test").values)
     return None
+
+
+def zs_summary(zs):
+    """Summary-row entries for zero-shot results: <task>/<mode>_bal_acc, plus _bal_acc_40X for
+    BreakHis."""
+    out = {}
+    for k, v in zs.items():
+        out[f"{k}_bal_acc"] = round(v["balanced_acc"], 4)
+        by_mag = v.get("balanced_acc_by_magnification", {})
+        if "40X" in by_mag:
+            out[f"{k}_bal_acc_40X"] = round(by_mag["40X"], 4)
+    return out
+
+
+# Averages of zero-shot balanced accuracy, each over a FIXED set of results (written only when all
+# of them were evaluated), so the means of different runs are comparable.
+ZS_MEANS = {
+    # the 8 results evaluated before resizecrop and BRACS existed: comparable with older runs
+    "zs_mean_bal_acc": ["bach/resize", "bach/tile", "crc/native", "mhist/native", "breakhis/resize",
+                        "breakhis/tile", "breakhis_subtype/resize", "breakhis_subtype/tile"],
+    # standard benchmark protocol: resizecrop preprocessing, every task once
+    "zs_mean_std_bal_acc": ["bach/resizecrop", "crc/native", "mhist/native", "breakhis/resizecrop",
+                            "breakhis_subtype/resizecrop", "bracs/resizecrop", "bracs_3class/resizecrop"],
+}
+
+
+def zs_flat(zs):
+    """Flat zero-shot metrics for training logs: zs_<task>/<mode>, zs_<task>/<mode>_40X (BreakHis)
+    and the fixed-set means of ZS_MEANS."""
+    out = {}
+    for k, v in zs.items():
+        out[f"zs_{k}"] = v["balanced_acc"]
+        by_mag = v.get("balanced_acc_by_magnification", {})
+        if "40X" in by_mag:
+            out[f"zs_{k}_40X"] = by_mag["40X"]
+    for name, keys in ZS_MEANS.items():
+        vals = [out.get(f"zs_{k}") for k in keys]
+        if all(x is not None for x in vals):
+            out[name] = float(np.mean(vals))
+    return out
+
+
+def patch_summary_cols():
+    """Fixed summary columns for scripts that log zero-shot results as zs_<task>/<mode>."""
+    cols = ["zs_" + c[:-len("_bal_acc")] for c in SUMMARY_COLS if c.endswith("_bal_acc")]
+    cols += ["zs_" + c.replace("_bal_acc", "") for c in SUMMARY_COLS if c.endswith("_bal_acc_40X")]
+    return cols + list(ZS_MEANS) + [c for c in SUMMARY_COLS if c.startswith("arch_")]
+
+
+def append_summary(summ_path, summary, fields):
+    """Append one row to summary.csv. If the file was written with other columns (e.g. before
+    resizecrop / BRACS were added), it is rewritten once with the new header so every row stays
+    aligned; columns a run did not have are left empty, old columns not in `fields` are kept."""
+    summ_path = Path(summ_path)
+    if summ_path.exists():
+        with open(summ_path, newline="") as fh:
+            reader = csv.DictReader(fh)
+            old_fields, rows = reader.fieldnames or [], list(reader)
+        if old_fields != fields:
+            fields = fields + [f for f in old_fields if f not in fields]
+            with open(summ_path, "w", newline="") as fh:
+                w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore", restval="")
+                w.writeheader()
+                w.writerows(rows)
+            print(f"  {summ_path.name}: header updated ({len(old_fields)} -> {len(fields)} columns)")
+    write_header = not summ_path.exists()
+    with open(summ_path, "a", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore", restval="")
+        if write_header:
+            w.writeheader()
+        w.writerow(summary)
 
 
 def balanced_acc(y, pred):
@@ -253,7 +335,7 @@ def zero_shot(model, encoder, test_dir, modes, device, run_dir, prompt_cache, hu
                 w.writerow(["true\\pred"] + labels)
                 for lab, row in zip(labels, cm):
                     w.writerow([lab] + row.tolist())
-            print(f"  {ds:16s} {mode:7s} n={r['n']:5d}  bal_acc {r['balanced_acc']:.4f}  "
+            print(f"  {ds:16s} {mode:10s} n={r['n']:5d}  bal_acc {r['balanced_acc']:.4f}  "
                   f"acc {r['acc']:.4f}  wF1 {r['weighted_f1']:.4f}"
                   + ("  by mag " + " ".join(f"{k}:{v:.3f}" for k, v in r["balanced_acc_by_magnification"].items())
                      if "balanced_acc_by_magnification" in r else ""))
@@ -268,7 +350,8 @@ def main():
     p.add_argument("--test-feats", required=True, help="--out-dir of extract_uni2h_test_data.py")
     p.add_argument("--txt-model", required=True,
                    help="local sentence-transformers folder of the text encoder used for --pairs")
-    p.add_argument("--test-modes", default="resize,tile", help="image modes for BACH/BreakHis")
+    p.add_argument("--test-modes", default="resizecrop,resize,tile",
+                   help="image modes for BACH/BreakHis/BRACS (resizecrop = benchmark preprocessing)")
     p.add_argument("--arch-feats", nargs="*", default=[],
                    help="ARCH feature files from extract_arch_features.py (cross-modal retrieval)")
     # model
@@ -412,16 +495,11 @@ def main():
                "depth": args.depth, "width": args.width, "epochs": args.epochs, "lr": args.lr,
                "batch_size": args.batch_size, "seed": args.seed, "best_epoch": best_epoch,
                "val_mean_recall": round(best, 4),
-               **{f"{k}_bal_acc": round(v["balanced_acc"], 4) for k, v in zs.items()},
+               **zs_summary(zs),
                **{f"{n}_{k}": round(v, 4) for n, r in retr.items() for k, v in r.items() if "R@" in k}}
     fields = list(summary)[:11] + SUMMARY_COLS    # fixed columns, so rows of all runs line up
     summ_path = Path(args.runs_dir) / "summary.csv"
-    write_header = not summ_path.exists()
-    with open(summ_path, "a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore", restval="")
-        if write_header:
-            w.writeheader()
-        w.writerow(summary)
+    append_summary(summ_path, summary, fields)
     print(f"\nsaved run to {run_dir}  (summary appended to {summ_path})")
 
 

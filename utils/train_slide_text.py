@@ -11,7 +11,7 @@ Everything for one run goes to <runs-dir>/<run-name>_<timestamp>/:
 and one line is appended to <runs-dir>/summary_slide_text.csv.
 
 Example:
-  python train_slide_text.py \
+  python utils/train_slide_text.py \
     --features-dir $SCRATCH/tcga_trident/20x_256px_0px_overlap/features_uni_v2 \
     --txt-feats /project/.../tcga_report_text/tcga_reports_BioLORD-2023.pt \
     --batch-size 32 --max-patches 8192 --epochs 30 --run-name xattn_full

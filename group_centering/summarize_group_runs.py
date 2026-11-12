@@ -56,6 +56,13 @@ def main():
     df = load_runs(args.runs_dir)
     if df.empty:
         raise SystemExit(f"no closed-form runs in {args.runs_dir}")
+    # zs_mean over the benchmarks every run has, so runs from before/after resizecrop and BRACS
+    # were added stay comparable
+    zs_cols = [c for c in df.columns if "/" in c]
+    common = [c for c in zs_cols if df[c].notna().all()]
+    if common and len(common) < len(zs_cols):
+        print(f"note: zs_mean over the {len(common)} of {len(zs_cols)} benchmarks present in every run")
+    df["zs_mean"] = df[common].mean(axis=1) if common else None
     if (df.group_center != "none").sum() == 0:
         print("note: no --group-center runs yet; showing the references only")
     ref = df[df.group_center == "none"].sort_values("start").groupby("base").tail(1).set_index("base")

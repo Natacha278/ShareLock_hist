@@ -70,9 +70,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Sampler
 
+import pathlib, sys  # noqa: E401  (shared modules live in ../utils)
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "utils"))
+
 from projection import MLP, ProjectionModel
 from tcga_bags import TCGABags, collate_bags
-from train_projection import SUMMARY_COLS, arch_retrieval, load_text_encoder, zero_shot
+from train_projection import SUMMARY_COLS, append_summary, patch_summary_cols, zs_flat, arch_retrieval, load_text_encoder, zero_shot
 from train_slide_text import evaluate, unique_dir
 
 # TCGA project -> organ (several projects share an organ: those are the hardest negatives)
@@ -330,7 +333,7 @@ def main():
     # patch-level monitoring
     p.add_argument("--test-feats", default=None, help="--out-dir of extract_uni2h_test_data.py (zero-shot each epoch)")
     p.add_argument("--txt-model", default=None, help="local sentence-transformers folder (needed with --test-feats)")
-    p.add_argument("--test-modes", default="resize,tile")
+    p.add_argument("--test-modes", default="resizecrop,resize,tile")
     p.add_argument("--arch-feats", nargs="*", default=[])
     p.add_argument("--no-eval-epoch0", action="store_true", help="skip the evaluation of the initial model")
     # misc
@@ -452,14 +455,10 @@ def main():
                 prompts = {}
                 zs = zero_shot(pm, encoder, args.test_feats, modes, device, d, prompts)
                 (d / "prompts.json").write_text(json.dumps(prompts, indent=1))
-                out.update({f"zs_{k}": v["balanced_acc"] for k, v in zs.items()})
+                out.update(zs_flat(zs))
             if args.arch_feats:
                 retr = arch_retrieval(pm, args.arch_feats, txt_model_name, device)
                 out.update({f"{n}_{k}": v for n, r in retr.items() for k, v in r.items() if "R@" in k})
-        if out:
-            zs_vals = [v for k, v in out.items() if k.startswith("zs_")]
-            if zs_vals:
-                out["zs_mean_bal_acc"] = float(np.mean(zs_vals))
         return out
 
     def save(path, epoch, metrics):
@@ -568,16 +567,10 @@ def main():
                "epochs": args.epochs, "bags_per_step": args.bags_per_step, "seed": args.seed,
                "selected_epoch": best_epoch, **{f"test_{k}": round(v, 4) for k, v in test_metrics.items()},
                **{k: round(v, 4) for k, v in final_patch.items()}}
-    patch_cols = ["zs_" + c[:-len("_bal_acc")] for c in SUMMARY_COLS if c.endswith("_bal_acc")]
-    patch_cols += ["zs_mean_bal_acc"] + [c for c in SUMMARY_COLS if c.startswith("arch_")]
+    patch_cols = patch_summary_cols()
     fields = [k for k in summary if not k.startswith(("zs_", "arch_"))] + patch_cols   # fixed columns across runs
     path = Path(args.runs_dir) / "summary_limit.csv"
-    new = not path.exists()
-    with open(path, "a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore", restval="")
-        if new:
-            w.writeheader()
-        w.writerow(summary)
+    append_summary(path, summary, fields)
     print(f"saved run to {run_dir}")
 
 

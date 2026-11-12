@@ -54,7 +54,7 @@ python "$SCRIPT_DIR/extract_uni2h_test_data.py" \
     --crc-root      "$LOCAL/crc7k" \
     --mhist-root    "$LOCAL/mhist" \
     --breakhis-root "$LOCAL/breakhis" \
-    --modes         resize,tile \
+    --modes         resizecrop,resize,tile \
     --tile-size     224 \
     --batch-size    128 \
     --num-workers   "$SLURM_CPUS_PER_TASK"

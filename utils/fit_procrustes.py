@@ -42,7 +42,7 @@ Only the Quilt train split (img_is_val == False) is used to fit; the val split g
 FOSCTTM and a linear CKA between the two spaces (the paper's predictor of alignability).
 
 Example:
-  python fit_procrustes.py \
+  python utils/fit_procrustes.py \
     --pairs $SLURM_TMPDIR/quilt_pairs_t05_biolord.pt \
     --test-feats $ROOT/data/patch_datasets/uni_2h_feat \
     --arch-feats $ROOT/data/patch_datasets/uni_2h_feat/arch/arch_pubmed.pt \
@@ -69,7 +69,7 @@ import torch.nn.functional as F
 
 from group_centering import add_group_args, fit_group_centers, group_cfg, group_tag
 from quilt_pairs import QuiltPairs
-from train_projection import (HUB_METHODS, SUMMARY_COLS, arch_retrieval, load_text_encoder,
+from train_projection import (HUB_METHODS, SUMMARY_COLS, append_summary, zs_summary, arch_retrieval, load_text_encoder,
                               quilt_reference, retrieval_metrics, set_seed, zero_shot)
 
 
@@ -265,7 +265,7 @@ def main():
     p.add_argument("--pairs", required=True, help="file from build_quilt_pairs.py")
     p.add_argument("--test-feats", required=True, help="--out-dir of extract_uni2h_test_data.py")
     p.add_argument("--txt-model", required=True, help="text encoder used for --pairs (for the prompts)")
-    p.add_argument("--test-modes", default="resize,tile")
+    p.add_argument("--test-modes", default="resizecrop,resize,tile")
     p.add_argument("--arch-feats", nargs="*", default=[])
     p.add_argument("--method", choices=["orthogonal", "linear", "cca"], default="orthogonal")
     p.add_argument("--direction", choices=["t2i", "i2t"], default="t2i",
@@ -391,16 +391,11 @@ def main():
     summary = {"run": run_dir.name, "txt_model": txt_model_name, "project": tag + (f"+hub_{args.hub_correction}_{args.hub_ref}" if args.hub_correction != "none" else ""),
                "depth": 0, "width": 0, "epochs": 0, "lr": "", "batch_size": "", "seed": args.seed,
                "best_epoch": "", "val_mean_recall": round(val.get("mean_recall", float("nan")), 4),
-               **{f"{k}_bal_acc": round(v["balanced_acc"], 4) for k, v in zs.items()},
+               **zs_summary(zs),
                **{f"{n}_{k}": round(v, 4) for n, r in retr.items() for k, v in r.items() if "R@" in k}}
     fields = list(summary)[:11] + SUMMARY_COLS
     summ_path = Path(args.runs_dir) / "summary.csv"
-    write_header = not summ_path.exists()
-    with open(summ_path, "a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore", restval="")
-        if write_header:
-            w.writeheader()
-        w.writerow(summary)
+    append_summary(summ_path, summary, fields)
     print(f"\nsaved run to {run_dir}  (summary appended to {summ_path})")
 
 

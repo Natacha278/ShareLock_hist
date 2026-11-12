@@ -82,6 +82,32 @@ CLASSES = {
                                 "colloid carcinoma of the breast"],
         "papillary_carcinoma": ["papillary carcinoma of the breast", "breast papillary carcinoma"],
     },
+    # BRACS RoIs, 7 subtypes (labels = subtype codes stored in the feature files)
+    "bracs": {
+        "N":    ["normal breast tissue", "non-neoplastic breast tissue",
+                 "normal breast ducts and lobules"],
+        "PB":   ["benign breast lesion", "breast fibroadenoma", "fibrocystic change of the breast",
+                 "sclerosing adenosis of the breast"],
+        "UDH":  ["usual ductal hyperplasia", "usual ductal hyperplasia of the breast",
+                 "benign ductal epithelial hyperplasia"],
+        "FEA":  ["flat epithelial atypia", "flat epithelial atypia of the breast",
+                 "columnar cell lesion with atypia"],
+        "ADH":  ["atypical ductal hyperplasia", "atypical ductal hyperplasia of the breast",
+                 "atypical intraductal epithelial proliferation"],
+        "DCIS": ["ductal carcinoma in situ", "DCIS", "breast carcinoma in situ",
+                 "in situ carcinoma of the breast"],
+        "IC":   ["invasive breast carcinoma", "invasive ductal carcinoma", "IDC",
+                 "infiltrating breast carcinoma"],
+    },
+    # BRACS RoIs, 3 groups (labels = 'group' column of bracs/metadata.csv)
+    "bracs_3class": {
+        "benign":    ["benign breast tissue", "normal or benign breast tissue",
+                      "non-atypical benign breast lesion"],
+        "atypical":  ["atypical breast lesion", "atypical ductal proliferation of the breast",
+                      "atypical ductal hyperplasia or flat epithelial atypia"],
+        "malignant": ["malignant breast tumor", "breast carcinoma", "breast cancer",
+                      "ductal carcinoma in situ or invasive breast carcinoma"],
+    },
 }
 
 

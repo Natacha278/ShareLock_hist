@@ -27,9 +27,12 @@ from pathlib import Path
 
 import torch
 
+import pathlib, sys  # noqa: E401  (shared modules live in ../utils)
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "utils"))
+
 from projection import ProjectionModel
 from train_slide_text import unique_dir
-from train_projection import (HUB_METHODS, SUMMARY_COLS, arch_retrieval, load_text_encoder,
+from train_projection import (HUB_METHODS, SUMMARY_COLS, append_summary, zs_summary, arch_retrieval, load_text_encoder,
                               zero_shot)
 
 
@@ -38,7 +41,8 @@ def main():
     p.add_argument("--ckpt", required=True, help="train_projection-format checkpoint (state_dict + model_cfg)")
     p.add_argument("--test-feats", required=True, help="--out-dir of extract_uni2h_test_data.py")
     p.add_argument("--txt-model", required=True, help="local sentence-transformers folder (same encoder as training)")
-    p.add_argument("--test-modes", default="resize,tile", help="image modes for BACH/BreakHis")
+    p.add_argument("--test-modes", default="resizecrop,resize,tile",
+                   help="image modes for BACH/BreakHis/BRACS (resizecrop = benchmark preprocessing)")
     p.add_argument("--arch-feats", nargs="*", default=[], help="ARCH feature files from extract_arch_features.py")
     p.add_argument("--hub-correction", choices=HUB_METHODS, default="none",
                    help="zero-shot hubness correction; reference = each test set itself (transductive)")
@@ -97,17 +101,12 @@ def main():
 
     summary = {"run": run_name, "ckpt": ckpt_path.name, "txt_model": txt_model_name,
                "depth": cfg.get("depth"), "width": cfg.get("width"), "hub": args.hub_correction,
-               **{f"{k}_bal_acc": round(v["balanced_acc"], 4) for k, v in zs.items()},
+               **zs_summary(zs),
                **{f"{n}_{k}": round(v, 4) for n, r in retr.items() for k, v in r.items() if "R@" in k}}
     fields = list(summary)[:6] + SUMMARY_COLS
     runs_dir = Path(args.runs_dir) if args.runs_dir else ckpt_path.parent.parent
     path = runs_dir / "summary_eval.csv"
-    new = not path.exists()
-    with open(path, "a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore", restval="")
-        if new:
-            w.writeheader()
-        w.writerow(summary)
+    append_summary(path, summary, fields)
     print(f"\nsaved results to {out}  (summary row appended to {path})")
 
 

@@ -80,12 +80,16 @@ from torch.utils.data import DataLoader, Dataset
 
 from eval_slide_zeroshot import flat as flat_slide_zs
 from eval_slide_zeroshot import slide_zero_shot
+
+import pathlib, sys  # noqa: E401  (shared modules live in ../utils)
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "utils"))
+
 from projection import ProjectionModel, clip_loss
 from quilt_pairs import QuiltPairs
 from tcga_bags import TCGABags, split_of
 from train_limit import organ_of, set_seed
 from train_limit_mix import quilt_batches
-from train_projection import SUMMARY_COLS, arch_retrieval, load_text_encoder, param_groups, retrieval_metrics, zero_shot
+from train_projection import SUMMARY_COLS, append_summary, patch_summary_cols, zs_flat, arch_retrieval, load_text_encoder, param_groups, retrieval_metrics, zero_shot
 from train_slide_text import unique_dir
 
 
@@ -394,7 +398,7 @@ def main():
     # monitoring
     p.add_argument("--test-feats", default=None)
     p.add_argument("--txt-model", default=None)
-    p.add_argument("--test-modes", default="resize,tile")
+    p.add_argument("--test-modes", default="resizecrop,resize,tile")
     p.add_argument("--arch-feats", nargs="*", default=[])
     p.add_argument("--no-slide-zs", action="store_true")
     p.add_argument("--slide-zs-ks", default="1,10,50,100,0")
@@ -582,13 +586,10 @@ def main():
                 prompts = {}
                 zs = zero_shot(model, encoder, args.test_feats, modes, device, d, prompts)
                 (d / "prompts.json").write_text(json.dumps(prompts, indent=1))
-                out.update({f"zs_{k}": v["balanced_acc"] for k, v in zs.items()})
+                out.update(zs_flat(zs))
             if args.arch_feats:
                 retr = arch_retrieval(model, args.arch_feats, txt_model_name, device)
                 out.update({f"{n}_{k}": v for n, r in retr.items() for k, v in r.items() if "R@" in k})
-        zs_vals = [v for k, v in out.items() if k.startswith("zs_")]
-        if zs_vals:
-            out["zs_mean_bal_acc"] = float(np.mean(zs_vals))
         return out
 
     def slide_zs(split_name, tag):
@@ -798,18 +799,12 @@ def main():
                **{k: round(ck["val"][k], 4) for k in ("val_auc_other", "val_auc_same", "val_null_rate",
                                                       "quilt_val_mean_recall") if k in ck["val"]},
                **{k: round(v, 4) for k, v in final.items()}}
-    patch_cols = ["zs_" + c[:-len("_bal_acc")] for c in SUMMARY_COLS if c.endswith("_bal_acc")]
-    patch_cols += ["zs_mean_bal_acc"] + [c for c in SUMMARY_COLS if c.startswith("arch_")]
+    patch_cols = patch_summary_cols()
     slide_cols = [f"slide_zs_test_{t}_{'mean' if k == 0 else f'top{k}'}" for t in ("lung", "kidney", "brain",
                                                                                     "pancancer", "mean") for k in zs_ks]
     base = [k for k in summary if not k.startswith(("zs_", "arch_", "slide_zs_", "quilt_val_i", "quilt_val_t"))]
     path = Path(args.runs_dir) / "summary_o1b.csv"
-    new = not path.exists()
-    with open(path, "a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=base + patch_cols + slide_cols, extrasaction="ignore", restval="")
-        if new:
-            w.writeheader()
-        w.writerow(summary)
+    append_summary(path, summary, base + patch_cols + slide_cols)
     print(f"saved run to {run_dir}")
 
 

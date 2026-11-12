@@ -43,6 +43,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+import pathlib, sys  # noqa: E401  (shared modules live in ../utils)
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "utils"))
+
 from zeroshot_prompts import TEMPLATES
 
 # TCGA project -> class descriptions (synonyms; each combined with every template)
