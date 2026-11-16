@@ -5,3 +5,4 @@ commands.md
 sb_*
 __pycache__/
 *.pyc
+logs/

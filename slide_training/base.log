@@ -1,0 +1,165 @@
+device: cuda (NVIDIA H100 80GB HBM3)
+run dir: /project/rrg-josedolz/natgill/ShareLock_hist/runs_slide_data/pot_sweep/base_1116-1658
+slides  train 6,561  val 805  test 843  |  sentences train 48,425  val 5,831  (49 shorter than 20 chars dropped)  7.4 per slide
+concepts (embed, thr 0.95): 41,498 concepts for 48,425 training sentences in 3s; 2,975 with >1 sentence, covering 20.4% of sentences; largest:
+       229  The surgical margins were free from tumor involvement.
+        75  The pathology report indicates the following diagnoses: 1.
+        69  The surgical margin of resection is negative for tumor.
+        43  The tumor is confined to the kidney and does not extend into the perinephric fat.
+        36  All margins of resection were free of tumor.
+building patch cache: 8,209 slides x 1024 patches (25.8 GB, cuda)
+  cache: 1000/8209 slides (2s)
+  cache: 2000/8209 slides (4s)
+  cache: 3000/8209 slides (6s)
+  cache: 4000/8209 slides (8s)
+  cache: 5000/8209 slides (9s)
+  cache: 6000/8209 slides (11s)
+  cache: 7000/8209 slides (13s)
+  cache: 8000/8209 slides (15s)
+  done in 16s; patches per slide: median 1024, min 23
+text MLP initialised from /project/rrg-josedolz/natgill/ShareLock_hist/runs/biolord_text_large/model_best.pt (depth 4, width 4096)
+E-step partial OT: eps 0.02, sentence mass 32, patch capacity 1, merge concepts True, lambda at plan FDR 0.1 (1000 calib slides, 3 other-organ decoys)  |  w > 0.05, soft NULL < 0.5 (max)  |  positives concept  weighting False  T 0.0554  lr 5e-05  batch 512 (mixed organ)  |  Quilt weight 0.0
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 8988.63it/s]
+
+round 0 (initial model):
+  lambda grid 0.679..0.984 (per-row calibration in the E-step)
+  bach             resize     n=  400  bal_acc 0.8400  acc 0.8400  wF1 0.8324
+  bach             resizecrop n=  400  bal_acc 0.8200  acc 0.8200  wF1 0.8115
+  bach             tile       n=  400  bal_acc 0.6675  acc 0.6675  wF1 0.6598
+  crc              native     n= 7180  bal_acc 0.7297  acc 0.7694  wF1 0.7439
+  mhist            native     n=  977  bal_acc 0.5369  acc 0.5312  wF1 0.5394
+  breakhis         resize     n= 7909  bal_acc 0.7955  acc 0.8090  wF1 0.8118  by mag 40X:0.700 100X:0.834 200X:0.861 400X:0.787
+  breakhis         resizecrop n= 7909  bal_acc 0.7921  acc 0.8077  wF1 0.8103  by mag 40X:0.725 100X:0.831 200X:0.844 400X:0.768
+  breakhis         tile       n= 7909  bal_acc 0.7676  acc 0.8063  wF1 0.8048  by mag 40X:0.755 100X:0.847 200X:0.816 400X:0.644
+  breakhis_subtype resize     n= 7909  bal_acc 0.4157  acc 0.4514  wF1 0.4356  by mag 40X:0.407 100X:0.428 200X:0.421 400X:0.405
+  breakhis_subtype resizecrop n= 7909  bal_acc 0.4013  acc 0.4382  wF1 0.4236  by mag 40X:0.390 100X:0.418 200X:0.415 400X:0.381
+  breakhis_subtype tile       n= 7909  bal_acc 0.3825  acc 0.4271  wF1 0.4118  by mag 40X:0.380 100X:0.426 200X:0.408 400X:0.312
+  bracs            resize     n=  570  bal_acc 0.4491  acc 0.4491  wF1 0.4105
+  bracs            resizecrop n=  570  bal_acc 0.4539  acc 0.4544  wF1 0.4176
+  bracs            tile       n=  570  bal_acc 0.4555  acc 0.4579  wF1 0.4027
+  bracs_3class     resize     n=  570  bal_acc 0.6682  acc 0.6702  wF1 0.6823
+  bracs_3class     resizecrop n=  570  bal_acc 0.6725  acc 0.6737  wF1 0.6854
+  bracs_3class     tile       n=  570  bal_acc 0.7384  acc 0.7386  wF1 0.7483
+  slide-zs lung       n=   94 (2 classes)  top1 0.8021  top10 0.8021  top50 0.7825  top100 0.7843  mean 0.8137
+  slide-zs kidney     n=   78 (3 classes)  top1 0.9325  top10 0.9444  top50 0.9325  top100 0.9206  mean 0.9127
+  slide-zs pancancer  n=  767 (21 classes)  top1 0.6586  top10 0.6893  top50 0.6835  top100 0.6812  mean 0.6593
+round   0  val AUC other 0.6938  same 0.5159  val soft NULL 0.7699  patch zs 0.6419  slide zs (top10) 0.8120
+
+round 1 E-step (per-row lambda: 54% of rows matched, mean 0.908, row FDR 0.028): 48,425 sentences, soft NULL 76.1% (hard rule: 46.1%), sentence weight 0.67, expected witnesses 12.6 (hard k* 355.6), shared patches 29.3%, Sinkhorn err 2.9e-03  (18s)
+    [most witnesses] sum w  31.6  s 0.98  TCGA-TGCT  The testicular parenchyma exhibits moderate atrophy, and the margin of the spermatic cord 
+    [most witnesses] sum w  31.4  s 0.96  TCGA-BRCA  Additionally, lobular carcinoma in situ (LCIS) and columnar cell change are also present.
+    [most witnesses] sum w  31.3  s 0.94  TCGA-TGCT  The tumor was confined to the testis, and angio-invasion and invasion of rete testis were 
+    [soft NULL] sum w  17.7  s 0.49  TCGA-TGCT  Angio-invasion was present, but there was no invasion of rete testis.
+    [soft NULL] sum w  16.7  s 0.45  TCGA-KIRC  KIDNEY, RIGHT, NEPHRECTOMY: - Renal cell carcinoma, clear cell type with sarcomatoid featu
+    [soft NULL] sum w  16.2  s 0.47  TCGA-TGCT  The operation performed was an orchidectomy with inguinal approach.
+  M-step epoch 1/2: 22 steps  loss 2.5204  quilt 0.0000  positive mass/row 1.05  off-diag positives 0.05%  sentence weight 0.67  same-organ pairs 7.3%  (0s)
+  M-step epoch 2/2: 44 steps  loss 2.3744  quilt 0.0000  positive mass/row 1.05  off-diag positives 0.05%  sentence weight 0.67  same-organ pairs 7.3%  (0s)
+  lambda grid 0.570..0.929 (per-row calibration in the E-step)
+  bach             resize     n=  400  bal_acc 0.8575  acc 0.8575  wF1 0.8588
+  bach             resizecrop n=  400  bal_acc 0.8250  acc 0.8250  wF1 0.8260
+  bach             tile       n=  400  bal_acc 0.6650  acc 0.6650  wF1 0.6500
+  crc              native     n= 7180  bal_acc 0.8320  acc 0.8595  wF1 0.8525
+  mhist            native     n=  977  bal_acc 0.5741  acc 0.5067  wF1 0.4873
+  breakhis         resize     n= 7909  bal_acc 0.8151  acc 0.8098  wF1 0.8148  by mag 40X:0.751 100X:0.842 200X:0.866 400X:0.802
+  breakhis         resizecrop n= 7909  bal_acc 0.8107  acc 0.8112  wF1 0.8156  by mag 40X:0.774 100X:0.839 200X:0.852 400X:0.777
+  breakhis         tile       n= 7909  bal_acc 0.7753  acc 0.8067  wF1 0.8066  by mag 40X:0.800 100X:0.844 200X:0.823 400X:0.625
+  breakhis_subtype resize     n= 7909  bal_acc 0.4060  acc 0.4623  wF1 0.4539  by mag 40X:0.373 100X:0.417 200X:0.429 400X:0.407
+  breakhis_subtype resizecrop n= 7909  bal_acc 0.3965  acc 0.4514  wF1 0.4422  by mag 40X:0.376 100X:0.410 200X:0.410 400X:0.391
+  breakhis_subtype tile       n= 7909  bal_acc 0.3817  acc 0.4004  wF1 0.4081  by mag 40X:0.389 100X:0.417 200X:0.410 400X:0.307
+  bracs            resize     n=  570  bal_acc 0.5050  acc 0.5053  wF1 0.4901
+  bracs            resizecrop n=  570  bal_acc 0.5032  acc 0.5035  wF1 0.4890
+  bracs            tile       n=  570  bal_acc 0.4932  acc 0.4947  wF1 0.4660
+  bracs_3class     resize     n=  570  bal_acc 0.6579  acc 0.6719  wF1 0.6814
+  bracs_3class     resizecrop n=  570  bal_acc 0.6717  acc 0.6842  wF1 0.6933
+  bracs_3class     tile       n=  570  bal_acc 0.7120  acc 0.7281  wF1 0.7328
+  slide-zs lung       n=   94 (2 classes)  top1 0.7745  top10 0.7745  top50 0.7451  top100 0.7549  mean 0.7843
+  slide-zs kidney     n=   78 (3 classes)  top1 0.9365  top10 0.9563  top50 0.9524  top100 0.9484  mean 0.9206
+  slide-zs pancancer  n=  767 (21 classes)  top1 0.7974  top10 0.8147  top50 0.7899  top100 0.7904  mean 0.7979
+round   1  loss 2.3744  quilt 0.0000  val AUC other 0.8019  same 0.5536  val soft NULL 0.5689  patch zs 0.6633  slide zs (top10) 0.8485
+
+round 2 E-step (per-row lambda: 70% of rows matched, mean 0.817, row FDR 0.018): 48,425 sentences, soft NULL 56.2% (hard rule: 30.0%), sentence weight 0.72, expected witnesses 14.4 (hard k* 599.7), shared patches 36.9%, Sinkhorn err 2.9e-03  (18s)
+    [most witnesses] sum w  31.9  s 0.97  TCGA-HNSC  The submandibular gland on the left side is unremarkable.
+    [most witnesses] sum w  31.9  s 1.00  TCGA-DLBC  A separate fragment of normal thymus is also present.
+    [most witnesses] sum w  31.9  s 0.98  TCGA-TGCT  The tumor was confined to the testis, and angio-invasion and invasion of rete testis were 
+    [soft NULL] sum w  19.3  s 0.48  TCGA-LUAD  The pathology report includes a list of multiple specimens submitted for analysis, includi
+    [soft NULL] sum w  17.3  s 0.50  TCGA-KIRC  KIDNEY, RIGHT, NEPHRECTOMY: - Renal cell carcinoma, clear cell type with sarcomatoid featu
+    [soft NULL] sum w  17.0  s 0.49  TCGA-HNSC  Additional details are provided regarding the size, invasion, and characteristics of the s
+  M-step epoch 1/2: 41 steps  loss 2.3411  quilt 0.0000  positive mass/row 1.07  off-diag positives 0.06%  sentence weight 0.72  same-organ pairs 7.7%  (0s)
+  M-step epoch 2/2: 82 steps  loss 2.2527  quilt 0.0000  positive mass/row 1.07  off-diag positives 0.06%  sentence weight 0.72  same-organ pairs 7.7%  (0s)
+  lambda grid 0.560..0.906 (per-row calibration in the E-step)
+  bach             resize     n=  400  bal_acc 0.7775  acc 0.7775  wF1 0.7722
+  bach             resizecrop n=  400  bal_acc 0.7600  acc 0.7600  wF1 0.7498
+  bach             tile       n=  400  bal_acc 0.5375  acc 0.5375  wF1 0.4960
+  crc              native     n= 7180  bal_acc 0.8372  acc 0.8508  wF1 0.8341
+  mhist            native     n=  977  bal_acc 0.5577  acc 0.4852  wF1 0.4587
+  breakhis         resize     n= 7909  bal_acc 0.8054  acc 0.7980  wF1 0.8036  by mag 40X:0.745 100X:0.846 200X:0.854 400X:0.777
+  breakhis         resizecrop n= 7909  bal_acc 0.7984  acc 0.8006  wF1 0.8052  by mag 40X:0.763 100X:0.841 200X:0.842 400X:0.746
+  breakhis         tile       n= 7909  bal_acc 0.7556  acc 0.7972  wF1 0.7953  by mag 40X:0.818 100X:0.843 200X:0.775 400X:0.576
+  breakhis_subtype resize     n= 7909  bal_acc 0.3999  acc 0.4298  wF1 0.4229  by mag 40X:0.354 100X:0.405 200X:0.428 400X:0.415
+  breakhis_subtype resizecrop n= 7909  bal_acc 0.3931  acc 0.4239  wF1 0.4149  by mag 40X:0.355 100X:0.404 200X:0.410 400X:0.406
+  breakhis_subtype tile       n= 7909  bal_acc 0.3731  acc 0.3700  wF1 0.3723  by mag 40X:0.356 100X:0.406 200X:0.414 400X:0.312
+  bracs            resize     n=  570  bal_acc 0.5241  acc 0.5246  wF1 0.5055
+  bracs            resizecrop n=  570  bal_acc 0.5255  acc 0.5263  wF1 0.5129
+  bracs            tile       n=  570  bal_acc 0.4832  acc 0.4860  wF1 0.4387
+  bracs_3class     resize     n=  570  bal_acc 0.6802  acc 0.6877  wF1 0.6989
+  bracs_3class     resizecrop n=  570  bal_acc 0.6837  acc 0.6895  wF1 0.7014
+  bracs_3class     tile       n=  570  bal_acc 0.7289  acc 0.7351  wF1 0.7426
+  slide-zs lung       n=   94 (2 classes)  top1 0.8413  top10 0.8413  top50 0.8137  top100 0.8137  mean 0.8039
+  slide-zs kidney     n=   78 (3 classes)  top1 0.9444  top10 0.9643  top50 0.9484  top100 0.9484  mean 0.9405
+  slide-zs pancancer  n=  767 (21 classes)  top1 0.8141  top10 0.8259  top50 0.8218  top100 0.8248  mean 0.8320
+round   2  loss 2.2527  quilt 0.0000  val AUC other 0.8256  same 0.5820  val soft NULL 0.4931  patch zs 0.6305  slide zs (top10) 0.8772
+
+round 3 E-step (per-row lambda: 75% of rows matched, mean 0.781, row FDR 0.015): 48,425 sentences, soft NULL 47.1% (hard rule: 25.6%), sentence weight 0.76, expected witnesses 15.5 (hard k* 640.5), shared patches 37.6%, Sinkhorn err 2.9e-03  (18s)
+    [most witnesses] sum w  32.0  s 0.95  TCGA-HNSC  The submandibular gland on the left side is unremarkable.
+    [most witnesses] sum w  31.9  s 0.96  TCGA-TGCT  The tumor was confined to the testis, and angio-invasion and invasion of rete testis were 
+    [most witnesses] sum w  31.9  s 1.00  TCGA-DLBC  A separate fragment of normal thymus is also present.
+    [soft NULL] sum w  17.7  s 0.46  TCGA-SKCM  The patient had a history of melanoma in the left arm.
+    [soft NULL] sum w  17.5  s 0.50  TCGA-TGCT  The pathology report shows that the patient underwent a right orchidectomy and was found t
+    [soft NULL] sum w  17.0  s 0.46  TCGA-TGCT  No intratubular germ cell neoplasia is identified, and the tumor is limited to the testis.
+  M-step epoch 1/2: 50 steps  loss 2.2095  quilt 0.0000  positive mass/row 1.07  off-diag positives 0.06%  sentence weight 0.76  same-organ pairs 7.9%  (0s)
+  M-step epoch 2/2: 100 steps  loss 2.1461  quilt 0.0000  positive mass/row 1.07  off-diag positives 0.06%  sentence weight 0.76  same-organ pairs 8.0%  (0s)
+  lambda grid 0.544..0.887 (per-row calibration in the E-step)
+  bach             resize     n=  400  bal_acc 0.7300  acc 0.7300  wF1 0.7156
+  bach             resizecrop n=  400  bal_acc 0.7000  acc 0.7000  wF1 0.6754
+  bach             tile       n=  400  bal_acc 0.5025  acc 0.5025  wF1 0.4388
+  crc              native     n= 7180  bal_acc 0.8052  acc 0.8240  wF1 0.7919
+  mhist            native     n=  977  bal_acc 0.5674  acc 0.4770  wF1 0.4286
+  breakhis         resize     n= 7909  bal_acc 0.7839  acc 0.7709  wF1 0.7782  by mag 40X:0.696 100X:0.835 200X:0.848 400X:0.757
+  breakhis         resizecrop n= 7909  bal_acc 0.7771  acc 0.7746  wF1 0.7808  by mag 40X:0.720 100X:0.829 200X:0.838 400X:0.719
+  breakhis         tile       n= 7909  bal_acc 0.7444  acc 0.7815  wF1 0.7811  by mag 40X:0.793 100X:0.833 200X:0.771 400X:0.570
+  breakhis_subtype resize     n= 7909  bal_acc 0.3953  acc 0.4323  wF1 0.4238  by mag 40X:0.349 100X:0.401 200X:0.424 400X:0.407
+  breakhis_subtype resizecrop n= 7909  bal_acc 0.3857  acc 0.4221  wF1 0.4135  by mag 40X:0.346 100X:0.395 200X:0.409 400X:0.392
+  breakhis_subtype tile       n= 7909  bal_acc 0.3558  acc 0.3835  wF1 0.3912  by mag 40X:0.339 100X:0.400 200X:0.382 400X:0.293
+  bracs            resize     n=  570  bal_acc 0.5217  acc 0.5228  wF1 0.5002
+  bracs            resizecrop n=  570  bal_acc 0.5198  acc 0.5211  wF1 0.4990
+  bracs            tile       n=  570  bal_acc 0.4582  acc 0.4614  wF1 0.4161
+  bracs_3class     resize     n=  570  bal_acc 0.6963  acc 0.6982  wF1 0.7103
+  bracs_3class     resizecrop n=  570  bal_acc 0.7022  acc 0.7000  wF1 0.7137
+  bracs_3class     tile       n=  570  bal_acc 0.7331  acc 0.7228  wF1 0.7335
+  slide-zs lung       n=   94 (2 classes)  top1 0.8609  top10 0.8609  top50 0.8431  top100 0.8333  mean 0.8039
+  slide-zs kidney     n=   78 (3 classes)  top1 0.9524  top10 0.9524  top50 0.9484  top100 0.9484  mean 0.9286
+  slide-zs pancancer  n=  767 (21 classes)  top1 0.8132  top10 0.8157  top50 0.8133  top100 0.8159  mean 0.8076
+round   3  loss 2.1461  quilt 0.0000  val AUC other 0.8391  same 0.5963  val soft NULL 0.4522  patch zs 0.6106  slide zs (top10) 0.8763
+
+selected round 3 (combined); final evaluation:
+  bach             resize     n=  400  bal_acc 0.7300  acc 0.7300  wF1 0.7156
+  bach             resizecrop n=  400  bal_acc 0.7000  acc 0.7000  wF1 0.6754
+  bach             tile       n=  400  bal_acc 0.5025  acc 0.5025  wF1 0.4388
+  crc              native     n= 7180  bal_acc 0.8052  acc 0.8240  wF1 0.7919
+  mhist            native     n=  977  bal_acc 0.5674  acc 0.4770  wF1 0.4286
+  breakhis         resize     n= 7909  bal_acc 0.7839  acc 0.7709  wF1 0.7782  by mag 40X:0.696 100X:0.835 200X:0.848 400X:0.757
+  breakhis         resizecrop n= 7909  bal_acc 0.7771  acc 0.7746  wF1 0.7808  by mag 40X:0.720 100X:0.829 200X:0.838 400X:0.719
+  breakhis         tile       n= 7909  bal_acc 0.7444  acc 0.7815  wF1 0.7811  by mag 40X:0.793 100X:0.833 200X:0.771 400X:0.570
+  breakhis_subtype resize     n= 7909  bal_acc 0.3953  acc 0.4323  wF1 0.4238  by mag 40X:0.349 100X:0.401 200X:0.424 400X:0.407
+  breakhis_subtype resizecrop n= 7909  bal_acc 0.3857  acc 0.4221  wF1 0.4135  by mag 40X:0.346 100X:0.395 200X:0.409 400X:0.392
+  breakhis_subtype tile       n= 7909  bal_acc 0.3558  acc 0.3835  wF1 0.3912  by mag 40X:0.339 100X:0.400 200X:0.382 400X:0.293
+  bracs            resize     n=  570  bal_acc 0.5217  acc 0.5228  wF1 0.5002
+  bracs            resizecrop n=  570  bal_acc 0.5198  acc 0.5211  wF1 0.4990
+  bracs            tile       n=  570  bal_acc 0.4582  acc 0.4614  wF1 0.4161
+  bracs_3class     resize     n=  570  bal_acc 0.6963  acc 0.6982  wF1 0.7103
+  bracs_3class     resizecrop n=  570  bal_acc 0.7022  acc 0.7000  wF1 0.7137
+  bracs_3class     tile       n=  570  bal_acc 0.7331  acc 0.7228  wF1 0.7335
+  slide-zs lung       n=   85 (2 classes)  top1 0.8708  top10 0.8819  top50 0.8681  top100 0.8556  mean 0.7722
+  slide-zs kidney     n=   94 (3 classes)  top1 0.9394  top10 0.9515  top50 0.9677  top100 0.9677  mean 0.9515
+  slide-zs pancancer  n=  789 (21 classes)  top1 0.7976  top10 0.8117  top50 0.8102  top100 0.8033  mean 0.7845
+saved run to /project/rrg-josedolz/natgill/ShareLock_hist/runs_slide_data/pot_sweep/base_1116-1658

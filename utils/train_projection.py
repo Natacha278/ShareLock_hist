@@ -388,7 +388,7 @@ def main():
     set_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     name = args.run_name or f"{args.project}_d{args.depth}_w{args.width}"
-    run_dir = Path(args.runs_dir) / f"{name}_{datetime.now():%Y%m%d-%H%M%S}"
+    run_dir = Path(args.runs_dir) / f"{name}_{datetime.now():%m%d-%H%M}"
     run_dir.mkdir(parents=True)
     print(f"run dir: {run_dir}")
 

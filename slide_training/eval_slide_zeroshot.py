@@ -207,12 +207,39 @@ def flat(results):
     return out
 
 
-def main():
-    from torch.utils.data import DataLoader
+def evaluate_split(model, encoder, ds, device, num_workers=4, ks=DEFAULT_KS, pancancer_min=10, out_dir=None,
+                   max_patches=0, prefix="", tasks=("lung", "kidney", "brain", "pancancer"), verbose=True):
+    """Slide zero-shot on every slide of a TCGABags split (all patches unless max_patches; restored afterwards).
+    Returns (results, flat dict 'slide_zs_<prefix><task>_<topk>' -> balanced accuracy)."""
+    from torch.utils.data import DataLoader, Subset
 
+    from tcga_bags import collate_bags
+    keep = [i for i in range(len(ds)) if label_of(ds.projects[i]) in PROJECT_CLASSES]
+    if not keep:
+        return {}, {}
+    old, ds.max_patches = ds.max_patches, (max_patches or None)
+    prompts = {}
+    try:
+        dl = DataLoader(Subset(ds, keep), batch_size=1, num_workers=num_workers, collate_fn=collate_bags)
+        slides = ((int(idx[0]), patches[0][mask[0]]) for patches, mask, _, idx in dl)
+        res = slide_zero_shot(model, encoder, slides, ds.projects, device, ks, pancancer_min, out_dir, prompts,
+                              tasks, verbose)
+    finally:
+        ds.max_patches = old
+    if out_dir is not None:
+        Path(out_dir, "results.json").write_text(json.dumps(res, indent=2))
+        Path(out_dir, "prompts.json").write_text(json.dumps(prompts, indent=1))
+    return res, {k.replace("slide_zs_", f"slide_zs_{prefix}", 1): v for k, v in flat(res).items()}
+
+
+def summary_columns(prefix="", ks=DEFAULT_KS):
+    return [f"slide_zs_{prefix}{t}_{k_name(k)}" for t in ("lung", "kidney", "brain", "pancancer", "mean") for k in ks]
+
+
+def main():
     from projection import ProjectionModel
-    from tcga_bags import TCGABags, collate_bags
-    from train_projection import load_text_encoder
+    from tcga_bags import TCGABags
+    from train_projection import append_summary, load_text_encoder
     from train_slide_text import unique_dir
 
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -255,31 +282,19 @@ def main():
 
     out = Path(args.out_dir) if args.out_dir else unique_dir(ckpt_path.parent / f"slide_zs_{datetime.now():%m%d-%H%M}")
     out.mkdir(parents=True, exist_ok=True)
-    keep = [i for i in range(len(ds)) if label_of(ds.projects[i]) in PROJECT_CLASSES]
-    sub = torch.utils.data.Subset(ds, keep)
-    dl = DataLoader(sub, batch_size=1, num_workers=args.num_workers, collate_fn=collate_bags)
-    slides = ((int(idx[0]), patches[0][mask[0]]) for patches, mask, _, idx in dl)
-
     encoder = load_text_encoder(args.txt_model, device)
-    prompts = {}
-    res = slide_zero_shot(model, encoder, slides, ds.projects, device, ks, args.pancancer_min, out, prompts, tasks)
-    (out / "prompts.json").write_text(json.dumps(prompts, indent=1))
+    res, flat_res = evaluate_split(model, encoder, ds, device, args.num_workers, ks, args.pancancer_min, out,
+                                   args.max_patches, tasks=tasks)
     (out / "results.json").write_text(json.dumps({"ckpt": str(ckpt_path), "split": args.split, "ks": ks,
                                                   "results": res}, indent=2))
     (out / "config.json").write_text(json.dumps(vars(args), indent=2))
 
     row = {"run": args.name or ckpt_path.parent.name, "ckpt": ckpt_path.name, "split": args.split,
-           **{k: round(v, 4) for k, v in flat(res).items()}}
+           **{k: round(v, 4) for k, v in flat_res.items()}}
     runs_dir = Path(args.runs_dir) if args.runs_dir else ckpt_path.parent.parent
     path = runs_dir / "summary_slide_zs.csv"
-    cols = ["run", "ckpt", "split"] + [f"slide_zs_{t}_{k_name(k)}" for t in ("lung", "kidney", "brain", "pancancer", "mean")
-                                       for k in ks]
-    new = not path.exists()
-    with open(path, "a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore", restval="")
-        if new:
-            w.writeheader()
-        w.writerow(row)
+    cols = ["run", "ckpt", "split"] + summary_columns("", ks)
+    append_summary(path, row, cols)
     print(f"\nsaved results to {out}  (summary row appended to {path})")
 
 

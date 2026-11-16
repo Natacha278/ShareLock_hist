@@ -34,6 +34,9 @@ Round r = 1..--rounds
       (c) --weighting: LIMIT-style down-weighting of the remaining negatives, w = 1 - (cos(t_a, t_b) + 1) / 2
           on the current text embeddings, no gradient
       (d) batches: one pair per sentence, at most --sents-per-slide sentences of a slide per batch
+      --batch-organ same: batches drawn within one organ (hard, same-organ negatives, as LIMIT's bags);
+          --same-organ-frac < 1 keeps the rest of the pairs in mixed batches. Pairs with hidden equivalences are
+          most frequent within an organ, so combine with the concept mask (default) and possibly --weighting
       --loss sigmoid: SigLIP-style loss with positives (the mask), trusted negatives (pairs from different
           organs; --sigmoid-negatives all = every non-positive) and IGNORED same-organ unknown pairs
     plus the Quilt prior: + --quilt-weight * CLIP loss on Quilt-1M pairs (as train_limit_mix.py), and an
@@ -309,7 +312,7 @@ def encode_sentences(model, sent_feat, chunk=16384):
 
 
 # ============================================================================ M-step
-def make_batches(sents, sent_slide, cap, batch_size, rng):
+def make_batches(sents, sent_slide, cap, batch_size, rng, keep_last=False):
     """One pair per sentence; sentences of a slide are spread over 'layers' of at most `cap`, so that a batch
     holds at most `cap` sentences of the same slide (except possibly across a layer boundary)."""
     sents = np.asarray(sents)
@@ -328,7 +331,34 @@ def make_batches(sents, sent_slide, cap, batch_size, rng):
     rkey = rng.random(inv.max() + 1)[inv]
     order = np.lexsort((rank, rkey, layer))
     s = sents[order]
-    return [s[k:k + batch_size] for k in range(0, len(s) - batch_size + 1, batch_size)]
+    stop = len(s) if keep_last else len(s) - batch_size + 1
+    return [s[k:k + batch_size] for k in range(0, stop, batch_size)]
+
+
+def make_epoch_batches(sents, sent_slide, slide_organ, cap, batch_size, rng, same_frac=0.0, min_frac=0.25):
+    """Batches for one M-step pass.
+    same_frac = 0: mixed batches (make_batches).
+    same_frac > 0: that fraction of the sentences (random) is batched WITHIN organs (same-organ negatives, as
+    LIMIT's bags); an organ's last partial batch is kept if it holds >= min_frac x batch_size pairs, otherwise
+    its pairs join the remaining sentences in mixed batches. Batch order is shuffled.
+    Returns (batches, is_same_organ flags)."""
+    sents = np.asarray(sents)
+    if same_frac <= 0 or len(sents) == 0:
+        b = make_batches(sents, sent_slide, cap, batch_size, rng)
+        return b, [False] * len(b)
+    to_same = rng.random(len(sents)) < same_frac
+    org = slide_organ[sent_slide[sents]]
+    same, rest = [], list(sents[~to_same])
+    for o in np.unique(org[to_same]):
+        bs = make_batches(sents[to_same & (org == o)], sent_slide, cap, batch_size, rng, keep_last=True)
+        if bs and len(bs[-1]) < batch_size and len(bs[-1]) < min_frac * batch_size:
+            rest += list(bs.pop())
+        same += bs
+    mixed = make_batches(np.array(rest, dtype=np.int64), sent_slide, cap, batch_size, rng)
+    batches = same + mixed
+    flags = [True] * len(same) + [False] * len(mixed)
+    order = rng.permutation(len(batches))
+    return [batches[i] for i in order], [flags[i] for i in order]
 
 
 def positive_mask(sent_b, key_b, concept, cw_keys, keyspace, mode):
@@ -373,6 +403,10 @@ def main():
     p.add_argument("--m-epochs", type=int, default=2, help="passes over the pseudo-pairs per M-step")
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--sents-per-slide", type=int, default=4, help="max sentences of one slide per batch")
+    p.add_argument("--batch-organ", choices=["mixed", "same"], default="mixed",
+                   help="same = M-step batches drawn within one organ (hard, same-organ negatives, as LIMIT's bags)")
+    p.add_argument("--same-organ-frac", type=float, default=1.0,
+                   help="with --batch-organ same: fraction of the pairs put in same-organ batches (rest: mixed)")
     p.add_argument("--loss", choices=["infonce", "sigmoid"], default="infonce")
     p.add_argument("--positives", choices=["concept", "witness", "single"], default="concept")
     p.add_argument("--concepts", choices=["embed", "exact", "none"], default="embed")
@@ -412,6 +446,9 @@ def main():
     args = p.parse_args()
     if args.test_feats and not args.txt_model:
         raise SystemExit("--test-feats needs --txt-model")
+    if args.batch_organ == "same" and args.loss == "sigmoid" and args.sigmoid_negatives == "other-organ":
+        raise SystemExit("--batch-organ same with --loss sigmoid leaves no other-organ negatives: "
+                         "add --sigmoid-negatives all")
     if args.quilt_weight > 0 and not args.pairs:
         raise SystemExit("--quilt-weight > 0 needs --pairs (or --quilt-weight 0)")
 
@@ -549,7 +586,8 @@ def main():
                       "slurm_job_id": os.environ.get("SLURM_JOB_ID"), "start": datetime.now().isoformat()}}
     (run_dir / "config.json").write_text(json.dumps(config, indent=2, default=str))
     print(f"loss {args.loss}  positives {args.positives}  weighting {args.weighting}  T {T:.4f}  lr {args.lr}  "
-          f"batch {args.batch_size} (<= {args.sents_per_slide}/slide)  |  E-step {args.select_witnesses}: q {args.fdr}, "
+          f"batch {args.batch_size} (<= {args.sents_per_slide}/slide, {args.batch_organ} organ"
+          f"{f' x{args.same_organ_frac:g}' if args.batch_organ == 'same' else ''})  |  E-step {args.select_witnesses}: q {args.fdr}, "
           f"{args.n_decoys} {args.decoys} decoys, cap {args.max_witnesses}  |  Quilt weight {args.quilt_weight}",
           flush=True)
 
@@ -647,7 +685,9 @@ def main():
     # ------------------------------------------------------------ EM
     train_sampler = DecoySampler(idx["train"], organs, args.decoys, args.n_decoys, args.seed)
     organ_ids = {o: k for k, o in enumerate(sorted(set(organs)))}
-    slide_organ = torch.tensor([organ_ids[o] for o in organs], device=device)
+    slide_organ_np = np.array([organ_ids[o] for o in organs], dtype=np.int64)
+    slide_organ = torch.from_numpy(slide_organ_np).to(device)
+    same_frac = args.same_organ_frac if args.batch_organ == "same" else 0.0
     t_start = time.time()
     for rnd in range(1, args.rounds + 1):
         if args.resample_cache:
@@ -709,9 +749,12 @@ def main():
 
         # ---------------- M-step
         model.train()
-        losses, qls, regs, pos_rows, pos_frac, t0 = [], [], [], [], [], time.time()
+        losses, qls, regs, pos_rows, pos_frac, same_pairs, n_same_b, t0 = [], [], [], [], [], [], 0, time.time()
         for ep in range(args.m_epochs):
-            for sb in make_batches(has_wit, sent_slide, args.sents_per_slide, args.batch_size, rng):
+            batches, flags = make_epoch_batches(has_wit, sent_slide, slide_organ_np, args.sents_per_slide,
+                                                args.batch_size, rng, same_frac)
+            n_same_b += sum(flags)
+            for sb in batches:
                 sb = torch.from_numpy(sb).to(device)
                 pick = w_off[sb] + (torch.rand(len(sb), device=device) * w_cnt[sb]).long()
                 slide_b, patch_b = wsl[pick], wp[pick]
@@ -761,15 +804,20 @@ def main():
                 B = len(sb)
                 pos_rows.append(float(M.sum(1).float().mean()))
                 pos_frac.append(float((M.sum() - B) / max(1, B * B - B)))
+                ob = slide_organ[slide_b]
+                same_pairs.append(float(((ob[:, None] == ob[None]).sum() - B) / max(1, B * B - B)))
             print(f"  M-step epoch {ep + 1}/{args.m_epochs}: {len(losses)} steps  loss {np.mean(losses):.4f}  "
                   f"quilt {np.mean(qls):.4f}  positives/row {np.mean(pos_rows):.2f}  "
-                  f"off-diag positives {np.mean(pos_frac):.2%}  ({time.time() - t0:.0f}s)", flush=True)
+                  f"off-diag positives {np.mean(pos_frac):.2%}  same-organ pairs {np.mean(same_pairs):.1%}  "
+                  f"({time.time() - t0:.0f}s)", flush=True)
 
         row = {"round": rnd, **e_row, "loss": float(np.mean(losses)) if losses else float("nan"),
                "loss_quilt": float(np.mean(qls)) if qls else float("nan"),
                "l2sp": float(np.mean(regs)) if regs else 0.0,
                "positives_per_row": float(np.mean(pos_rows)) if pos_rows else float("nan"),
                "offdiag_positive_frac": float(np.mean(pos_frac)) if pos_frac else float("nan"),
+               "same_organ_pair_frac": float(np.mean(same_pairs)) if same_pairs else float("nan"),
+               "same_organ_batches": n_same_b,
                "m_steps": len(losses), "mstep_s": round(time.time() - t0),
                **({k: float(v) for k, v in sig.items()} if sig is not None else {}),
                **evaluate_round(rnd)}
@@ -794,6 +842,7 @@ def main():
                "select_witnesses": args.select_witnesses, "decoys": args.decoys, "n_decoys": args.n_decoys,
                "fdr": args.fdr, "max_witnesses": args.max_witnesses, "loss": args.loss, "positives": args.positives,
                "concepts": args.concepts if args.positives == "concept" else "", "weighting": args.weighting,
+               "batch_organ": args.batch_organ if args.batch_organ == "mixed" else f"same{args.same_organ_frac:g}",
                "quilt_weight": args.quilt_weight, "l2sp": args.l2sp, "lr": args.lr, "rounds": args.rounds,
                "m_epochs": args.m_epochs, "seed": args.seed, "select": args.select, "selected_round": best_round,
                **{k: round(ck["val"][k], 4) for k in ("val_auc_other", "val_auc_same", "val_null_rate",

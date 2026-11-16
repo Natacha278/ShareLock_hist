@@ -1,0 +1,14 @@
+cp -r $DATA/bach/ICIAR2018_BACH_Challenge/. $LOCAL/bach/
+tar -xzf $DATA/breakhis/BreaKHis_v1.tar.gz -C $LOCAL/breakhis
+tar -xf  $DATA/bracs/BRACS_RoI.tar        -C $LOCAL/bracs   
+du -sh $LOCAL/*
+
+python extract_uni2h_test_data.py --weights $WEIGHTS --out-dir $OUT \
+    --bach-root $LOCAL/bach --breakhis-root $LOCAL/breakhis \
+    --modes resizecrop --tile-size 224 --batch-size 128 --num-workers $SLURM_CPUS_PER_TASK
+
+python extract_uni2h_test_data.py --weights $WEIGHTS --out-dir $OUT \
+    --bracs-root $LOCAL/bracs \
+    --modes resizecrop,resize,tile --bracs-tile-size 448 --batch-size 128 --num-workers $SLURM_CPUS_PER_TASK
+
+cp -r /scratch/natgill/bracs/BRACS_RoI $LOCAL/bracs/
